@@ -11,11 +11,11 @@ public class Code {
     private String binary; // converted binary code of size 16
 
     // constructor for a-instruction
-    public Code(int lineNum, String aAddr) {
+    public Code(int lineNum, String aAddr, SymbolTable symbolTable) {
         isC = false;
         this.lineNum = lineNum;
         this.aAddr = aAddr;
-        binary = convertA();
+        binary = convertA(symbolTable);
     }
     // constructor for c-instruction
     public Code(int lineNum, String cDest, String cComp, String cJump) {
@@ -32,8 +32,18 @@ public class Code {
     public int getLineNum() { return lineNum; }
     public String getBinary() { return binary; }
 
-    private String convertA() {
-        int n = Integer.parseInt(aAddr);
+    // ASSUMES: aAddr is nonnegative decimal number or symbol not starting with a digit
+    private String convertA(SymbolTable symbolTable) {
+        int n;
+        if (Character.isDigit(aAddr.charAt(0))) {
+            n = Integer.parseInt(aAddr);
+        } else if (symbolTable.contains(aAddr)) {
+            n = symbolTable.getVal(aAddr);
+        } else {
+            n = symbolTable.getNextAvail();
+            symbolTable.add(aAddr, n);
+            symbolTable.incrNextAvail();
+        }
         return "0" + intToBinary15(n);
     }
 
@@ -141,6 +151,7 @@ public class Code {
         return binary;
     }
 
+    // ASSUMES: n is nonnegative decimal number
     // EFFECTS: returns (n mod 2^15=32768) in binary notation
     private String intToBinary15(int n) {
         String binary = "";

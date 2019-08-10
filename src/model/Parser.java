@@ -8,61 +8,80 @@ import java.util.Scanner;
 public class Parser {
     private File file;
     private SymbolTable symbolTable;
-    private List<String> symbolicWithLabels;
-    private List<Code> symbolicParsed;
+    private List<String> inputNoWhitespace;
+    private List<String> firstPass; // inputNoWhitespace with no labels
+    private List<Code> secondPass; // code
 
     public Parser(File file) {
         this.file = file;
-        makeSymbolicWithLabels();
-        makeSymbolicParsed();
+        symbolTable = new SymbolTable();
+        makeInputNoWhitespace();
+        doFirstPass(); // get labels
+        doSecondPass(); // converts firstPass Strings to Code
     }
 
     // getters
-    public List<Code> getSymbolicParsed() {
-        return symbolicParsed;
+    public List<Code> getSecondPass() {
+        return secondPass;
     }
 
+    // ASSUMES: in-line comments marked by "//" string
     // MODIFIES: this
-    // EFFECTS: sets symbolicParsed to be a list of Code
-    private void makeSymbolicParsed() {
-        symbolicParsed = new ArrayList<>();
-        int lineNum = 0;
-        Code c;
+    // EFFECTS: sets inputNoWhitespace to be input with comments and whitespace removed
+    private void makeInputNoWhitespace() {
+        inputNoWhitespace = new ArrayList<>();
+        String line = "";
 
-        for (String line : symbolicWithLabels) {
+        try {
+            Scanner input = new Scanner(file);
+            while (input.hasNextLine()) {
+                line = input.nextLine();
+                line = processLine(line);
+                if (!line.isEmpty()) { inputNoWhitespace.add(line); }
+            }
+            input.close();
+        } catch (FileNotFoundException e) { e.printStackTrace(); }
+    }
+
+    // ASSUMES: labels of format (NAME)
+    // MODIFIES: this
+    // EFFECTS: adds labels to symbolTable with corresponding lineNum
+    //          sets firstPass to inputNoWhitespace with no labels
+    private void doFirstPass() {
+        firstPass = new ArrayList<>();
+        int lineNum = 0;
+
+        for (String line : inputNoWhitespace) {
             if (lineIsLabel(line)) {
-                symbolTable.add(line.replaceFirst("(", "").replaceFirst(")", ""), lineNum);
-            } else if (lineIsA(line)) {
-                c = new Code(lineNum, line.substring(1));
-                symbolicParsed.add(c);
-                lineNum++;
+                symbolTable.add(line.replaceFirst("\\(", "").replaceFirst("\\)", ""), lineNum);
             }
             else {
-                String[] parsed = parseC(line);
-                c = new Code(lineNum, parsed[0], parsed[1], parsed[2]);
-                symbolicParsed.add(c);
+                firstPass.add(line);
                 lineNum++;
             }
         }
     }
 
     // MODIFIES: this
-    // EFFECTS: sets symbolicWithLabels to be a list of Strings of symbolic code
-    private void makeSymbolicWithLabels() {
-        symbolicWithLabels = new ArrayList<>();
-        Scanner input;
-        String line = "";
+    // EFFECTS: sets secondPass to be a list of Code
+    private void doSecondPass() {
+        secondPass = new ArrayList<>();
+        int lineNum = 0;
+        Code c;
 
-        try {
-            input = new Scanner(file);
-            while (input.hasNextLine()) {
-                line = input.nextLine();
-                line = processLine(line);
-                if (!line.isEmpty()) { symbolicWithLabels.add(line); }
+        for (String line : firstPass) {
+            if (lineIsA(line)) {
+                c = new Code(lineNum, line.substring(1), symbolTable);
+                secondPass.add(c);
+                lineNum++;
             }
-            input.close();
-
-        } catch (FileNotFoundException e) { e.printStackTrace(); }
+            else {
+                String[] parsed = parseC(line);
+                c = new Code(lineNum, parsed[0], parsed[1], parsed[2]);
+                secondPass.add(c);
+                lineNum++;
+            }
+        }
     }
 
 
@@ -99,7 +118,7 @@ public class Parser {
     }
 
     private String processLine(String s) {
-        s = s.trim(); // remove any whitespace before command
+        s = s.trim(); // remove any whitespace and after command
         s = s.split("//")[0]; // remove any line comment
         s = s.replaceAll("\"|\'", ""); // remove quotations
         return s;
@@ -108,7 +127,7 @@ public class Parser {
     // EFFECTS: writes binary line by line to new file of given filename
     public void writeBinarytoFile(String filename) throws IOException {
         BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
-        for (Code c : symbolicParsed) {
+        for (Code c : secondPass) {
             writer.write(c.getBinary());
             writer.newLine();
         }
